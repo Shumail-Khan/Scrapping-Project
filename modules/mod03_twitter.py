@@ -2,121 +2,142 @@
 import pandas as pd
 import hashlib
 import re
-from deep_translator import GoogleTranslator  # pip install deep-translator
-import emoji  # pip install emoji (optional but recommended)
+from deep_translator import GoogleTranslator
+import emoji
+import tweepy
+
+# ------------------------
+# Utility Functions
+# ------------------------
 
 def hash_username(username):
-    """Hash username for privacy using SHA-256"""
     if pd.isna(username) or not username:
         return "anonymous"
     return hashlib.sha256(str(username).encode('utf-8')).hexdigest()
 
 
 def clean_text(text):
-    """
-    Clean tweet text - this version combines your pipeline clean_text 
-    with additional improvements
-    """
     if pd.isna(text) or not text:
         return ""
-    
+
     text = str(text).lower()
-    text = re.sub(r"http\S+|www\S+|https\S+", '', text)          # remove urls
-    text = re.sub(r'[^a-zA-Z0-9\s]', '', text)                   # remove special chars
-    text = emoji.replace_emoji(text, replace='')                 # remove emojis
-    text = re.sub(r'\s+', ' ', text).strip()                     # normalize spaces
-    
+    text = re.sub(r"http\S+|www\S+|https\S+", '', text)
+    text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+    text = emoji.replace_emoji(text, replace='')
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 
 def translate_text(text, source_lang='auto'):
-    """Optional translation to English using deep-translator"""
     if not text:
         return text
     try:
         translator = GoogleTranslator(source=source_lang, target='en')
-        translated = translator.translate(text)
-        return translated if translated else text
-    except Exception as e:
-        print(f"Translation failed: {e}")
+        return translator.translate(text)
+    except Exception:
         return text
 
+# ------------------------
+# Twitter API Functions
+# ------------------------
 
-def load_and_filter_tweets(dataset_path='twitter_dataset.csv', query_text="", max_tweets=100):
-    """
-    Load the local twitter dataset and filter tweets relevant to the query
-    Returns list of processed tweet dictionaries
-    """
+def init_twitter(bearer_token):
+    return tweepy.Client(bearer_token=bearer_token)
+
+
+def fetch_tweets(client, query, max_results=20):
+    try:
+        response = client.search_recent_tweets(
+            query=query,
+            max_results=max_results,
+            tweet_fields=["created_at"]
+        )
+
+        tweet_list = []
+        if response.data:
+            for tweet in response.data:
+                cleaned = clean_text(translate_text(tweet.text))
+                tweet_list.append({
+                    "source_type": "twitter",
+                    "source_name": "X",
+                    "text": cleaned,
+                    "timestamp": str(tweet.created_at),
+                    "author_hash": "api_user",
+                    "likes": 0,
+                    "retweets": 0,
+                    "original_text": tweet.text[:200]
+                })
+
+        return tweet_list
+
+    except Exception as e:
+        print(f"[Twitter API Error] {e}")
+        return []
+
+# ------------------------
+# Dataset Fallback
+# ------------------------
+
+def load_and_filter_tweets(dataset_path, query_text="", max_tweets=100):
     try:
         df = pd.read_csv(dataset_path)
-    except FileNotFoundError:
-        print(f"Dataset not found: {dataset_path}")
-        return []
     except Exception as e:
-        print(f"Error loading CSV: {e}")
+        print(f"Dataset load error: {e}")
         return []
 
-    if df.empty:
-        return []
-
-    # Basic keyword filtering
     if query_text:
-        keywords = [k.lower().strip() for k in query_text.split() if k.strip()]
-        if keywords:
-            # Match if ANY keyword is present
-            mask = df['Text'].astype(str).str.lower().apply(
-                lambda x: any(kw in x for kw in keywords)
-            )
-            df = df[mask]
+        keywords = query_text.lower().split()
+        df = df[df['Text'].astype(str).str.lower().apply(
+            lambda x: any(k in x for k in keywords)
+        )]
 
-    # Limit results
     df = df.head(max_tweets)
+    tweets = []
 
-    # Process each tweet
-    tweet_list = []
     for _, row in df.iterrows():
-        original_text = row['Text']
-        
-        # Optional: translate (most seem English, so this might not do much)
-        cleaned_translated = translate_text(original_text)
-        cleaned = clean_text(cleaned_translated)
-        
-        tweet_data = {
+        cleaned = clean_text(translate_text(row['Text']))
+        tweets.append({
             "source_type": "twitter",
             "source_name": "X",
             "text": cleaned,
-            "timestamp": str(row['Timestamp']),
-            "author_hash": hash_username(row['Username']),
+            "timestamp": str(row.get('Timestamp', '')),
+            "author_hash": hash_username(row.get('Username')),
             "likes": int(row.get('Likes', 0)),
             "retweets": int(row.get('Retweets', 0)),
-            "original_text": original_text[:200] + "..." if len(original_text) > 200 else original_text
-        }
-        tweet_list.append(tweet_data)
+            "original_text": row['Text'][:200]
+        })
 
-    print(f"Loaded & filtered {len(tweet_list)} tweets for query: '{query_text}'")
-    return tweet_list
+    return tweets
 
-# Api Key Code
-# import tweepy
+# ------------------------
+# Unified Access Point
+# ------------------------
 
-# def init_twitter(bearer_token):
-#     client = tweepy.Client(bearer_token=bearer_token)
-#     return client
+def get_twitter_data(
+    query_text,
+    bearer_token=None,
+    dataset_path='twitter_dataset.csv',
+    max_api_results=20,
+    max_dataset_results=50
+):
+    """
+    Try Twitter API first.
+    If API fails or returns no data → fallback to dataset.
+    """
 
-# def fetch_tweets(client, query, max_results=10):  # lower max_results
-#     try:
-#         tweets = client.search_recent_tweets(query=query, max_results=max_results)
-#         tweet_list = []
-#         if tweets.data:
-#             for tweet in tweets.data:
-#                 tweet_list.append({
-#                     "source_type": "twitter",
-#                     "source_name": "X",
-#                     "text": tweet.text,
-#                     "timestamp": tweet.created_at
-#                 })
-#         return tweet_list
-#     except Exception as e:
-#         print(f"Twitter API error: {e}")
-#         return []
+    tweets = []
 
+    if bearer_token:
+        print("Trying Twitter API...")
+        client = init_twitter(bearer_token)
+        tweets = fetch_tweets(client, query_text, max_api_results)
+
+    if not tweets:
+        print("Falling back to local Twitter dataset...")
+        tweets = load_and_filter_tweets(
+            dataset_path=dataset_path,
+            query_text=query_text,
+            max_tweets=max_dataset_results
+        )
+
+    return tweets

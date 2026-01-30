@@ -2,8 +2,7 @@
 import pandas as pd
 from modules.mod01_queries import get_queries
 from modules.mod02_news import fetch_news_newsapi, translate_text
-# from modules.mod03_twitter import init_twitter, fetch_tweets
-from modules.mod03_twitter import load_and_filter_tweets
+from modules.mod03_twitter import get_twitter_data
 from modules.mod04_youtube import init_youtube, fetch_youtube
 from modules.mod05_normalization import clean_text
 
@@ -31,24 +30,19 @@ def run_pipeline(news_api_key, twitter_bearer, youtube_api_key):
         # ------------------
         # Twitter
         # ------------------
-        # tweets = fetch_tweets(twitter_client, query_text)
-        # for d in tweets:
-        #     d["query_id"] = query_id
-        #     # Translate non-English tweets and clean
-        #     d["text"] = clean_text(translate_text(d["text"]))
-        # all_data.extend(tweets)
-        tweets = load_and_filter_tweets(
-            dataset_path='twitter_dataset.csv',      # adjust path if needed
+
+        tweets = get_twitter_data(
             query_text=query_text,
-            max_tweets=50                            # adjust as needed
+            bearer_token=twitter_bearer,
+            dataset_path='twitter_dataset.csv',
+            max_api_results=20,
+            max_dataset_results=50
         )
 
         for d in tweets:
             d["query_id"] = query_id
-            # d["text"] = clean_text(d["text"]) # Text is already cleaned & translated in load_and_filter_tweets
-            
+
         all_data.extend(tweets)
-        
         
         # ------------------
         # YouTube
