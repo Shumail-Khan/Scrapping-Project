@@ -1,0 +1,8 @@
+requests
+deep-translator
+google-api-python-client 
+youtube-transcript-api
+tweepy
+pandas
+python-dotenv
+emoji
