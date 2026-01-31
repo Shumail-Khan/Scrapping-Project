@@ -6,9 +6,9 @@ from modules.mod03_twitter import get_twitter_data
 from modules.mod04_youtube import init_youtube, fetch_youtube
 from modules.mod05_normalization import clean_text
 
-def run_pipeline(news_api_key, twitter_bearer, youtube_api_key):
+def run_pipeline(news_api_key, twitter_bearer, youtube_api_key, query, save_csv=False):
     all_data = []
-    queries = get_queries()
+    queries = get_queries(query)
     
     # Initialize API clients
     # twitter_client = init_twitter(twitter_bearer)
@@ -61,6 +61,7 @@ def run_pipeline(news_api_key, twitter_bearer, youtube_api_key):
     # Save to CSV
     # ------------------
     df = pd.DataFrame(all_data)
-    df.to_csv("multi_source_data_clean.csv", index=False)
-    print("Data saved to multi_source_data_clean.csv")
+    if save_csv:
+        df.to_csv("multi_source_data_clean.csv", index=False)
+        print("Data saved to multi_source_data_clean.csv")
     return df

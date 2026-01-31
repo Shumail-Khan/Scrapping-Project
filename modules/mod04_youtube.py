@@ -7,7 +7,7 @@ def init_youtube(api_key):
     """Initialize YouTube API client."""
     return build("youtube", "v3", developerKey=api_key)
 
-def fetch_youtube(youtube, query, max_results=5):
+def fetch_youtube(youtube, query, max_results=20):
     """Fetch YouTube videos for a query including title, description, and transcript."""
     request = youtube.search().list(
         q=query,

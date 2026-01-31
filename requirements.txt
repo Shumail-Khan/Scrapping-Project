@@ -6,3 +6,4 @@ tweepy
 pandas
 python-dotenv
 emoji
+flask

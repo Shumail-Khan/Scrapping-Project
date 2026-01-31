@@ -9,5 +9,5 @@ NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 TWITTER_BEARER = os.getenv("TWITTER_BEARER")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
-df = run_pipeline(NEWS_API_KEY, TWITTER_BEARER, YOUTUBE_API_KEY)
+df = run_pipeline(NEWS_API_KEY, TWITTER_BEARER, YOUTUBE_API_KEY, query="earthquake in Turkey", save_csv=True)
 print(df.head())
